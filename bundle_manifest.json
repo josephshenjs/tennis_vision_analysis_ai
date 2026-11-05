@@ -1,0 +1,32 @@
+{
+  "application": "rally_analysis",
+  "runtime": "runtime/python.exe",
+  "runtime_manifest": "runtime/manifest.json",
+  "assets": {
+    "ball": {
+      "path": "RacketVision/source/BallTrack/checkpoints/balltrack_best.pth",
+      "bytes": 46585585,
+      "sha256": "00d707b9db7a49561c411e4765956e79bcd7c7e20c7a0a535073440b3e972342"
+    },
+    "racket_detector": {
+      "path": "RacketVision/source/RacketPose/checkpoints/epoch_300.pth",
+      "bytes": 411293859,
+      "sha256": "e6ad74371259d844b11529a64b09052edaec4277ce9ebeeca64d77b9131a19cd"
+    },
+    "racket_pose": {
+      "path": "RacketVision/source/RacketPose/checkpoints/best_PCK_epoch_90.pth",
+      "bytes": 106524759,
+      "sha256": "faab22d4c8753759a6c6d4b48241e97b560f5a1b4374ba5cd4074932801a51e2"
+    },
+    "bounce": {
+      "path": "models/bounce/ctb_regr_bounce.cbm",
+      "bytes": 332976,
+      "sha256": "f525c96b843e47e261a4ea3fbe80f3498980c19821ac41a34b2299a0950ec531"
+    }
+  },
+  "external_requirements": [
+    "Windows x64",
+    "NVIDIA CUDA-compatible GPU and installed driver"
+  ],
+  "external_workspace_paths_required": false
+}

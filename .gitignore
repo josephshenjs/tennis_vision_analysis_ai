@@ -1,0 +1,95 @@
+# Python bytecode and native build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments and local Python tooling
+.venv/
+.venv-*/
+venv/
+env/
+ENV/
+__pypackages__/
+.pdm-python
+.pixi/
+
+# Build and packaging output
+/build/
+/dist/
+*.egg-info/
+.eggs/
+*.egg
+pip-wheel-metadata/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Test, coverage, lint, and type-checker caches
+.pytest_cache/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+.cache/
+.ipynb_checkpoints/
+
+# Generated embedded Python bundle (keep version and license metadata)
+/runtime/*
+!/runtime/manifest.json
+!/runtime/LICENSE.txt
+
+# Downloaded or trained model binaries (paths and hashes live in manifests)
+*.pt
+*.pth
+*.ckpt
+*.cbm
+*.onnx
+*.engine
+
+# Generated analysis, training, and review output
+/outputs*/
+/analysis/
+/input_videos/
+/output_videos/
+/training/datasets/
+/training/review/
+/training/environment_before_gpu.txt
+/runs/
+*.log
+
+# Local video inputs and rendered videos; keep images and test assets trackable
+*.avi
+*.mp4
+*.mov
+*.mkv
+*.webm
+
+# Local configuration and credentials (keep shareable templates)
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+.envrc
+.pypirc
+/secrets/
+
+# Editor and operating-system temporary files
+.idea/
+.vscode/*.local.json
+*.swp
+*.swo
+*~
+tempCodeRunnerFile.py
+.DS_Store
+Thumbs.db
+Desktop.ini

@@ -13,7 +13,9 @@ from packaging.requirements import Requirement
 APP=Path(__file__).resolve().parents[1]
 RUNTIME=APP/'runtime'
 SITE=RUNTIME/'Lib/site-packages'
-ROOTS=['torch','torchvision','numpy','opencv-python','mmcv','mmengine','mmdet','mmpose','catboost']
+ROOTS=['torch','torchvision','numpy','opencv-python','mmcv','mmengine','mmdet','mmpose','catboost',
+       'fastapi','uvicorn','boto3','firebase-admin','google-cloud-firestore','python-dotenv',
+       'httpx','grpcio','grpcio-status']
 
 
 def main():

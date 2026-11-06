@@ -47,7 +47,8 @@ def far_window(calibration,width,height,explicit=None):
 
 
 def render(video,path,rows,events,rackets,stop,speed_report=None):
-    info=metadata(video); writer=cv2.VideoWriter(str(path),cv2.VideoWriter_fourcc(*'mp4v'),info['fps'],(info['width'],info['height']))
+    from .web_video import VideoWriter
+    info=metadata(video); writer=VideoWriter(video,path,info)
     if not writer.isOpened(): raise RuntimeError('Cannot open output video encoder.')
     trail=deque(maxlen=12); count=0
     try:
@@ -84,11 +85,12 @@ def prepare_jobs(videos,output,calibration_path,overwrite=False):
     return jobs
 
 
-async def analyze_videos(args):
+async def analyze_videos(args, resources=None):
     from .engine import Engine
-    loop=asyncio.get_running_loop(); gpu=ThreadPoolExecutor(max_workers=1,thread_name_prefix='rally-cuda')
-    cpu=ThreadPoolExecutor(max_workers=args.cpu_workers,thread_name_prefix='rally-cpu')
-    semaphore=asyncio.Semaphore(args.jobs); stop=threading.Event()
+    loop=asyncio.get_running_loop()
+    gpu=resources['gpu'] if resources else ThreadPoolExecutor(max_workers=1,thread_name_prefix='rally-cuda')
+    cpu=resources['cpu'] if resources else ThreadPoolExecutor(max_workers=args.cpu_workers,thread_name_prefix='rally-cpu')
+    semaphore=asyncio.Semaphore(args.jobs); stop=resources['stop'] if resources else threading.Event()
     started=time.perf_counter(); engine=None
     jobs=prepare_jobs(args.videos,args.output_dir,args.court_calibration,args.overwrite)
     async def on_gpu(function,*items,**kwargs):
@@ -96,7 +98,10 @@ async def analyze_videos(args):
     async def on_cpu(function,*items,**kwargs):
         return await loop.run_in_executor(cpu,partial(function,*items,**kwargs))
     try:
-        engine=await on_gpu(Engine,args.device,args.amp,args.prefetch)
+        engine=resources.get('engine') if resources else None
+        if engine is None:
+            engine=await on_gpu(Engine,args.device,args.amp,args.prefetch)
+            if resources is not None: resources['engine']=engine
         engine.stop=stop
         async def job(video,folder):
             async with semaphore:
@@ -176,5 +181,6 @@ async def analyze_videos(args):
         write_json(args.output_dir/'summary.json',summary)
         return 1 if any(r['state']=='failed' for r in results) else 0
     finally:
-        stop.set()
-        gpu.shutdown(wait=True,cancel_futures=True); cpu.shutdown(wait=True,cancel_futures=True)
+        if resources is None:
+            stop.set()
+            gpu.shutdown(wait=True,cancel_futures=True); cpu.shutdown(wait=True,cancel_futures=True)

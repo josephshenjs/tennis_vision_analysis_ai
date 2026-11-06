@@ -55,6 +55,9 @@ def main(argv=None):
     commands.add_parser('self-test',help='Run bundled CPU unit tests using the local runtime')
     commands.add_parser('calibrate',help='Click four court corners and generate standard keypoints',add_help=False)
     commands.add_parser('review',help='Review existing candidates and racket JSON',add_help=False)
+    serve=commands.add_parser('serve',help='Run the FastAPI court and R2 analysis API')
+    serve.add_argument('--host',default='127.0.0.1')
+    serve.add_argument('--port',type=int,default=8000)
     if argv and argv[0]=='self-test':
         code=use_local_runtime(argv)
         if code is not None: return code
@@ -71,6 +74,14 @@ def main(argv=None):
             from .compat.review_bounce_candidates import main as command
         command(); return 0
     args=p.parse_args(argv)
+    if args.command=='serve':
+        code=use_local_runtime(argv)
+        if code is not None: return code
+        import uvicorn
+        from .api import app
+        # One API worker owns the GPU queue. Do not enable multiple workers.
+        uvicorn.run(app,host=args.host,port=args.port,workers=1)
+        return 0
     if not args.device.startswith('cuda'): p.error('CUDA is required; use --device cuda:0 (or another CUDA index).')
     if not 1<=args.batch_size<=32 or not 1<=args.jobs<=16 or not 1<=args.cpu_workers<=32 or not 1<=args.prefetch<=8:
         p.error('Supported ranges: batch-size 1..32, jobs 1..16, cpu-workers 1..32, prefetch 1..8.')

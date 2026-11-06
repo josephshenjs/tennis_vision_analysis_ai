@@ -1,5 +1,114 @@
 # Rally Analysis：便携式 CUDA 网球回合分析
 
+## Automatic workflow API update (2026-11-05)
+
+`POST /analyses` also accepts optional `request_id` (64 lowercase hexadecimal
+characters). Repeated requests with the same identity/key reuse the existing job;
+a changed input or calibration returns 409. Each saved job includes its own court
+snapshot. Unfinished jobs resume on process startup from Firestore.
+
+The API now uses two bounded CPU job workers and one shared resident CUDA executor.
+TrackNet and the racket models are loaded once per API process, on demand. Run one
+API process per GPU. H.264 analysis video retains the input audio, and completed
+job status includes `output_sha256` and `output_size` for download verification.
+Configure `TENNIS_FFMPEG` if FFmpeg is not on PATH. GET /health reports API version 2.
+
+## FastAPI: court calibration and R2 analysis
+
+The API loads `.env.local` from this folder (existing environment variables take
+precedence). Start it with:
+
+```powershell
+.\rally_analysis.cmd serve --host 127.0.0.1 --port 8000
+```
+
+Open `http://127.0.0.1:8000/docs` for interactive request forms and the OpenAPI
+schema. `GET /health` is an unauthenticated process health check.
+
+For a fresh bundle, install the additional dependencies using a Python 3.11
+installation with pip; the embedded runtime itself does not include pip:
+
+```powershell
+python -m pip install --target runtime/Lib/site-packages -r requirements-api.txt
+python -m pip install --target runtime/Lib/site-packages --upgrade "typing-extensions==4.16.0"
+```
+
+Configuration is documented in [.env.example](.env.example). Firestore uses
+`RALLYCLIP_FIREBASE_PROJECT` and the exact `RALLYCLIP_FIRESTORE_DATABASE` name.
+Google authentication also requires Application Default Credentials, for example
+`GOOGLE_APPLICATION_CREDENTIALS=C:/secrets/service-account.json` in `.env.local`.
+Project/database names and R2 keys alone do not authenticate to Firestore.
+The Google identity needs Firestore read/write access. R2 credentials need object
+read/write access to `RALLYCLIP_ARTIFACT_BUCKET`.
+
+Authenticate with `Authorization: Bearer <Firebase ID token>` when
+`RALLYCLIP_REQUIRE_USER_AUTH=1`. Courts and jobs are scoped to that Firebase user.
+Trusted backend callers may instead use `RALLYCLIP_ANALYSIS_API_TOKEN` or
+`RALLYCLIP_API_TOKEN` as a Bearer token or `X-API-Token` header; these tokens bypass
+Firebase user authentication and share a separate service court namespace.
+Use the same authentication identity to save a court and submit its analysis.
+Keep backend tokens on the server. If user authentication is disabled and neither
+API token is configured, endpoints allow unauthenticated local use.
+
+1. `PUT /courts/{court_id}` saves exactly four outer doubles-court baseline corners
+   in original image pixels, ordered **far-left, far-right, near-right, near-left**.
+   Include the original video resolution; analysis rejects a different resolution.
+
+   ```json
+   {
+     "image_width": 1920,
+     "image_height": 1080,
+     "corners_px": [[700, 300], [1200, 300], [1700, 900], [200, 900]]
+   }
+   ```
+
+   `GET /courts/{court_id}` retrieves the saved calibration. These example points
+   must be replaced with points selected on the user's own video. Invalid,
+   out-of-bounds, crossed or degenerate corners return HTTP 422.
+   Firestore collection: `<RALLYCLIP_FIRESTORE_PREFIX>_courts`. Coordinates are
+   stored as maps, and derived calibration as JSON, because Firestore does not
+   support nested arrays.
+
+2. `POST /analyses` accepts the saved court and an R2 video URL:
+
+   ```json
+   {
+     "court_id": "camera1",
+     "file_url": "https://ACCOUNT_ID.r2.cloudflarestorage.com/BUCKET/clips/point_0003.mp4"
+   }
+   ```
+
+   The URL must be under `RALLYCLIP_R2_ENDPOINT/<RALLYCLIP_ARTIFACT_BUCKET>/`.
+   For a public/custom R2 domain, configure `RALLYCLIP_R2_PUBLIC_BASE_URL` to the
+   URL corresponding to the root of the same bucket. URL-encoded object names and
+   presigned URL query strings are accepted; downloads use the configured R2
+   credentials. Arbitrary external URLs are rejected.
+
+   HTTP 202 returns `job_id`, `state: queued`, and `status_url`.
+   The server downloads the input, runs the existing CUDA analysis pipeline,
+   and uploads `analysis.mp4` to `analyzed/<job_id>/analysis.mp4` in the same bucket.
+
+3. `GET /analyses/{job_id}` returns `queued`, `downloading`, `analyzing`,
+   `uploading`, `complete`, or `failed`. On completion it includes `output_bucket`,
+   `output_key`, and a fresh `output_url` valid for one hour. Failed jobs include
+   `failed_stage` and a sanitized error. Job status is stored in
+   `<RALLYCLIP_FIRESTORE_PREFIX>_analyses` in the configured Firestore database.
+
+Run one API process/worker per GPU. Up to eight jobs (including the active job)
+are accepted; further submissions return HTTP 429. Each job uses the bundled
+Python/CUDA pipeline, and temporary local files are removed after processing.
+Graceful shutdown waits for accepted jobs. Unfinished API jobs with a saved court snapshot resume from Firestore after a forced stop. Legacy jobs without a snapshot require resubmission. Model weights and NVIDIA/CUDA
+requirements are the same as CLI analysis.
+
+`run.py self-test` includes API tests with fake Firestore/R2 adapters; these test
+validation, authentication, ownership, job completion, queue limits, and failures
+without writing cloud data. They do not establish live cloud access.
+
+Implementation references: [FastAPI background work](https://fastapi.tiangolo.com/tutorial/background-tasks/),
+[Firestore Python client](https://docs.cloud.google.com/python/docs/reference/firestore/latest),
+[Boto3 uploads](https://docs.aws.amazon.com/boto3/latest/guide/s3-uploading-files.html),
+and [presigned download URLs](https://docs.aws.amazon.com/boto3/latest/reference/services/s3/client/generate_presigned_url.html).
+
 局部高分辨率补检默认启用：双窗口融合后，对有可靠前序轨迹、最长12帧（约0.4秒）的缺失段，用原始图像384x216局部区域重新运行同一个常驻CUDA TrackNet。每段视频最多4次，优先较长缺失段。只推理缺失段及邻近上下文，仍需额外采样背景/解码；并非零开销。--no-local-recovery 可关闭。
 
 补检须通过场地范围、至少2帧已有观测位置吻合、相邻检测支持及运动连续性检查；不覆盖已有观测，不用预测坐标填充。recovery.json 记录耗时、裁切范围、恢复帧和失败原因；fusion_audit.csv 的 local 表示补检实际观测。随后重新计算候选并进行球拍复核。
